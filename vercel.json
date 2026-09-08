@@ -16,8 +16,5 @@
       "dest": "/api/index.py"
     }
   ],
-  "outputDirectory": ".",
-  "env": {
-    "SECRET_KEY": "@secret-key"
-  }
+  "outputDirectory": "."
 }
