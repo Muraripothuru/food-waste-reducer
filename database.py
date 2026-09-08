@@ -48,12 +48,14 @@ class FoodDatabase:
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 username TEXT UNIQUE NOT NULL,
                 email TEXT UNIQUE NOT NULL,
-                password_hash TEXT NOT NULL,
-                salt TEXT NOT NULL,
+                password_hash TEXT DEFAULT '',
+                salt TEXT DEFAULT '',
                 full_name TEXT DEFAULT '',
                 avatar_color TEXT DEFAULT '#6366f1',
                 created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-                last_login TEXT
+                last_login TEXT,
+                provider TEXT DEFAULT '',
+                provider_id TEXT DEFAULT ''
             );
             
             CREATE TABLE IF NOT EXISTS categories (
@@ -123,6 +125,13 @@ class FoodDatabase:
             columns = [row[1] for row in cursor.fetchall()]
             if "user_id" not in columns:
                 conn.execute(f"ALTER TABLE {table} ADD COLUMN user_id INTEGER")
+        
+        cursor = conn.execute("PRAGMA table_info(users)")
+        columns = [row[1] for row in cursor.fetchall()]
+        if "provider" not in columns:
+            conn.execute("ALTER TABLE users ADD COLUMN provider TEXT DEFAULT ''")
+        if "provider_id" not in columns:
+            conn.execute("ALTER TABLE users ADD COLUMN provider_id TEXT DEFAULT ''")
         
         conn.commit()
         self._seed_categories()
@@ -478,6 +487,75 @@ class FoodDatabase:
         conn.commit()
         
         return {"success": True, "user_id": cursor.lastrowid, "message": "Account created successfully"}
+    
+    def get_or_create_oauth_user(self, provider: str, provider_user_id: str, 
+                                   email: str, name: str = "", avatar_url: str = "") -> Dict:
+        conn = self._get_conn()
+        
+        user = conn.execute(
+            "SELECT * FROM users WHERE provider = ? AND provider_id = ?",
+            (provider, provider_user_id)
+        ).fetchone()
+        
+        if user:
+            conn.execute("UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE id = ?", (user["id"],))
+            conn.commit()
+            return {
+                "success": True,
+                "user": {
+                    "id": user["id"],
+                    "username": user["username"],
+                    "email": user["email"],
+                    "full_name": user["full_name"],
+                    "avatar_color": user["avatar_color"]
+                }
+            }
+        
+        existing = conn.execute("SELECT id FROM users WHERE email = ?", (email,)).fetchone()
+        if existing:
+            conn.execute(
+                "UPDATE users SET provider = ?, provider_id = ? WHERE id = ?",
+                (provider, provider_user_id, existing["id"])
+            )
+            conn.commit()
+            user = conn.execute("SELECT * FROM users WHERE id = ?", (existing["id"],)).fetchone()
+            return {
+                "success": True,
+                "user": {
+                    "id": user["id"],
+                    "username": user["username"],
+                    "email": user["email"],
+                    "full_name": user["full_name"],
+                    "avatar_color": user["avatar_color"]
+                }
+            }
+        
+        username = email.split("@")[0]
+        base_username = username
+        counter = 1
+        while conn.execute("SELECT id FROM users WHERE username = ?", (username,)).fetchone():
+            username = f"{base_username}{counter}"
+            counter += 1
+        
+        colors = ['#6366f1', '#8b5cf6', '#ec4899', '#06b6d4', '#10b981', '#f59e0b', '#ef4444']
+        avatar_color = colors[hash(username) % len(colors)]
+        
+        cursor = conn.execute("""
+            INSERT INTO users (username, email, password_hash, salt, full_name, avatar_color, provider, provider_id)
+            VALUES (?, ?, '', '', ?, ?, ?, ?)
+        """, (username, email, name, avatar_color, provider, provider_user_id))
+        conn.commit()
+        
+        return {
+            "success": True,
+            "user": {
+                "id": cursor.lastrowid,
+                "username": username,
+                "email": email,
+                "full_name": name,
+                "avatar_color": avatar_color
+            }
+        }
     
     def authenticate_user(self, username: str, password: str) -> Dict:
         conn = self._get_conn()

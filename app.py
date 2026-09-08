@@ -2,6 +2,7 @@ from flask import Flask, render_template, request, redirect, url_for, jsonify, f
 from datetime import datetime, timedelta
 from database import FoodDatabase
 from analyzer import FoodAnalyzer
+from authlib.integrations.flask_client import OAuth
 import csv
 import io
 import os
@@ -17,6 +18,40 @@ app.config.update(
     SESSION_COOKIE_SAMESITE='Lax',
     PERMANENT_SESSION_LIFETIME=timedelta(days=7),
     MAX_CONTENT_LENGTH=1 * 1024 * 1024,
+)
+
+oauth = OAuth(app)
+
+oauth.register(
+    name='google',
+    client_id=os.environ.get("GOOGLE_CLIENT_ID", ""),
+    client_secret=os.environ.get("GOOGLE_CLIENT_SECRET", ""),
+    server_metadata_url='https://accounts.google.com/.well-known/openid-configuration',
+    client_kwargs={'scope': 'openid email profile'},
+)
+
+oauth.register(
+    name='github',
+    client_id=os.environ.get("GITHUB_CLIENT_ID", ""),
+    client_secret=os.environ.get("GITHUB_CLIENT_SECRET"),
+    access_token_url='https://github.com/login/oauth/access_token',
+    access_token_params=None,
+    authorize_url='https://github.com/login/oauth/authorize',
+    authorize_params=None,
+    api_base_url='https://api.github.com/',
+    client_kwargs={'scope': 'user:email'},
+)
+
+oauth.register(
+    name='apple',
+    client_id=os.environ.get("APPLE_CLIENT_ID", ""),
+    client_secret=os.environ.get("APPLE_CLIENT_SECRET", ""),
+    access_token_url='https://appleid.apple.com/auth/token',
+    access_token_params=None,
+    authorize_url='https://appleid.apple.com/auth/authorize',
+    authorize_params=None,
+    api_base_url='https://appleid.apple.com/',
+    client_kwargs={'scope': 'name email'},
 )
 
 logging.basicConfig(level=logging.INFO)
@@ -165,6 +200,93 @@ def logout():
     session.clear()
     flash("You have been logged out.", "info")
     return redirect(url_for("signin"))
+
+
+# ==================== OAUTH ROUTES ====================
+
+@app.route("/auth/<provider>")
+def oauth_login(provider):
+    if provider not in ('google', 'github', 'apple'):
+        flash("Invalid provider.", "error")
+        return redirect(url_for("signin"))
+    
+    client = oauth.create_client(provider)
+    if not client:
+        flash(f"{provider.title()} login is not configured.", "error")
+        return redirect(url_for("signin"))
+    
+    redirect_uri = url_for("oauth_callback", provider=provider, _external=True)
+    return client.authorize_redirect(redirect_uri)
+
+
+@app.route("/auth/<provider>/callback")
+def oauth_callback(provider):
+    if provider not in ('google', 'github', 'apple'):
+        flash("Invalid provider.", "error")
+        return redirect(url_for("signin"))
+    
+    client = oauth.create_client(provider)
+    if not client:
+        flash(f"{provider.title()} login is not configured.", "error")
+        return redirect(url_for("signin"))
+    
+    try:
+        token = client.authorize_access_token()
+        
+        if provider == 'google':
+            resp = client.get('userinfo')
+            resp.raise_for_status()
+            user_info = resp.json()
+            email = user_info.get('email', '')
+            name = user_info.get('name', '')
+            provider_id = user_info.get('sub', user_info.get('id', ''))
+        
+        elif provider == 'github':
+            resp = client.get('user')
+            resp.raise_for_status()
+            user_info = resp.json()
+            email = user_info.get('email', '')
+            name = user_info.get('name', '') or user_info.get('login', '')
+            provider_id = str(user_info.get('id', ''))
+            
+            if not email:
+                emails_resp = client.get('user/emails')
+                emails_resp.raise_for_status()
+                emails = emails_resp.json()
+                for e in emails:
+                    if e.get('primary'):
+                        email = e['email']
+                        break
+                if not email and emails:
+                    email = emails[0]['email']
+        
+        elif provider == 'apple':
+            user_info = client.parse_id_token(token)
+            email = user_info.get('email', '')
+            name = user_info.get('name', {}).get('firstName', '') + ' ' + user_info.get('name', {}).get('lastName', '')
+            name = name.strip() or email.split('@')[0]
+            provider_id = user_info.get('sub', '')
+        
+        if not email or not provider_id:
+            flash("Could not get your email from this provider.", "error")
+            return redirect(url_for("signin"))
+        
+        result = db.get_or_create_oauth_user(provider, provider_id, email, name)
+        
+        if result["success"]:
+            session.permanent = True
+            session["user_id"] = result["user"]["id"]
+            session["username"] = result["user"]["username"]
+            flash(f"Welcome, {result['user']['username']}!", "success")
+            return redirect(url_for("user_dashboard"))
+        else:
+            flash(result["message"], "error")
+            return redirect(url_for("signin"))
+    
+    except Exception as e:
+        logger.error(f"OAuth callback error: {e}")
+        flash(f"Authentication failed: {str(e)}", "error")
+        return redirect(url_for("signin"))
 
 
 @app.route("/dashboard")

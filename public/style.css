@@ -1982,14 +1982,16 @@ tr:hover {
     font-weight: 500;
     cursor: pointer;
     transition: all 0.3s ease;
+    text-decoration: none;
 }
 .btn-social:hover {
     border-color: var(--primary);
     background: rgba(99, 102, 241, 0.05);
+    transform: translateY(-2px);
 }
-.btn-google i { color: #ea4335; }
-.btn-github i { color: #fff; }
-.btn-apple i { color: #fff; }
+.btn-google i { color: #ea4335; font-size: 18px; }
+.btn-github i { color: #fff; font-size: 18px; }
+.btn-apple i { color: #fff; font-size: 18px; }
 .input-wrapper {
     position: relative;
 }
