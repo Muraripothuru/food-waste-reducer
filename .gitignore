@@ -1,0 +1,41 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+
+# Database
+*.db
+*.sqlite3
+
+# Logs
+*.log
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment
+.env
+.env.local
+
+# Vercel
+.vercel/
+
+# Node
+node_modules/
+
+# Distribution
+dist/
+build/
+*.egg-info/

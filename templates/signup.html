@@ -1,0 +1,99 @@
+{% extends "auth_base.html" %}
+
+{% block title %}Sign Up - FoodSaver{% endblock %}
+
+{% block auth_content %}
+<div class="auth-header">
+    <h2>Create Account</h2>
+    <p>Join us and start reducing food waste</p>
+</div>
+
+<form method="POST" action="/signup" class="auth-form" id="signupForm">
+    <div class="form-group animate-slide-in-right" style="animation-delay: 0.1s">
+        <div class="input-wrapper">
+            <i class="fas fa-user"></i>
+            <input type="text" name="full_name" placeholder="Full Name" required>
+            <label>Full Name</label>
+        </div>
+    </div>
+    
+    <div class="form-group animate-slide-in-right" style="animation-delay: 0.2s">
+        <div class="input-wrapper">
+            <i class="fas fa-at"></i>
+            <input type="text" name="username" placeholder="Username" required minlength="3">
+            <label>Username</label>
+        </div>
+    </div>
+    
+    <div class="form-group animate-slide-in-right" style="animation-delay: 0.3s">
+        <div class="input-wrapper">
+            <i class="fas fa-envelope"></i>
+            <input type="email" name="email" placeholder="Email Address" required>
+            <label>Email Address</label>
+        </div>
+    </div>
+    
+    <div class="form-group animate-slide-in-right" style="animation-delay: 0.4s">
+        <div class="input-wrapper">
+            <i class="fas fa-lock"></i>
+            <input type="password" name="password" id="password" placeholder="Password" required minlength="6">
+            <label>Password</label>
+            <button type="button" class="toggle-password" onclick="togglePassword('password')">
+                <i class="fas fa-eye"></i>
+            </button>
+        </div>
+        <div class="password-strength" id="passwordStrength">
+            <div class="strength-bar"></div>
+            <div class="strength-bar"></div>
+            <div class="strength-bar"></div>
+            <div class="strength-bar"></div>
+        </div>
+        <small class="password-hint">Minimum 6 characters</small>
+    </div>
+    
+    <div class="form-group animate-slide-in-right" style="animation-delay: 0.5s">
+        <div class="input-wrapper">
+            <i class="fas fa-lock"></i>
+            <input type="password" name="confirm_password" id="confirmPassword" placeholder="Confirm Password" required>
+            <label>Confirm Password</label>
+            <button type="button" class="toggle-password" onclick="togglePassword('confirmPassword')">
+                <i class="fas fa-eye"></i>
+            </button>
+        </div>
+        <small class="password-match" id="passwordMatch"></small>
+    </div>
+    
+    <div class="form-group animate-slide-in-right" style="animation-delay: 0.6s">
+        <label class="checkbox-wrapper">
+            <input type="checkbox" name="terms" required>
+            <span class="checkmark"></span>
+            <span>I agree to the <a href="#" onclick="showToast('Terms of Service coming soon.', 'info'); return false;">Terms of Service</a> and <a href="#" onclick="showToast('Privacy Policy coming soon.', 'info'); return false;">Privacy Policy</a></span>
+        </label>
+    </div>
+    
+    <button type="submit" class="btn-auth btn-primary animate-pulse" style="animation-delay: 0.7s">
+        <span>Create Account</span>
+        <i class="fas fa-arrow-right"></i>
+    </button>
+</form>
+
+<div class="auth-divider animate-fade-in-up" style="animation-delay: 0.8s">
+    <span>or continue with</span>
+</div>
+
+<div class="social-login animate-fade-in-up" style="animation-delay: 0.9s">
+    <button class="btn-social btn-google">
+        <i class="fab fa-google"></i>
+    </button>
+    <button class="btn-social btn-github">
+        <i class="fab fa-github"></i>
+    </button>
+    <button class="btn-social btn-apple">
+        <i class="fab fa-apple"></i>
+    </button>
+</div>
+
+<div class="auth-footer animate-fade-in-up" style="animation-delay: 1s">
+    <p>Already have an account? <a href="/signin" class="auth-link">Sign In</a></p>
+</div>
+{% endblock %}

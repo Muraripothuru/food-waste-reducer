@@ -1,0 +1,97 @@
+{% extends "base.html" %}
+{% block title %}Food Inventory - Food Waste Reducer{% endblock %}
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1><i class="fas fa-boxes" style="color: var(--info);"></i> Food Inventory</h1>
+        <p>Manage all your food items</p>
+    </div>
+    <div class="header-actions">
+        <a href="/search" class="btn btn-outline"><i class="fas fa-search"></i> Search</a>
+        <a href="/export" class="btn btn-outline"><i class="fas fa-download"></i> Export</a>
+        <a href="/add" class="btn btn-primary"><i class="fas fa-plus"></i> Add Item</a>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h2>All Items ({{ items|length }})</h2>
+    </div>
+
+    {% if items %}
+    <div class="table-wrapper">
+        <table>
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Name</th>
+                    <th>Category</th>
+                    <th>Quantity</th>
+                    <th>Storage</th>
+                    <th>Purchase</th>
+                    <th>Expiry</th>
+                    <th>Status</th>
+                    <th>Notes</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in items %}
+                <tr>
+                    <td>{{ item.id }}</td>
+                    <td><strong>{{ item.name }}</strong></td>
+                    <td><i class="fas {{ item.category_icon }}"></i> {{ item.category_name }}</td>
+                    <td>{{ item.quantity }} {{ item.unit }}</td>
+                    <td>
+                        {% if item.storage_location == 'fridge' %}<i class="fas fa-thermometer-half"></i>
+                        {% elif item.storage_location == 'freezer' %}<i class="fas fa-snowflake"></i>
+                        {% elif item.storage_location == 'pantry' %}<i class="fas fa-box"></i>
+                        {% else %}<i class="fas fa-store"></i>
+                        {% endif %} {{ item.storage_location }}
+                    </td>
+                    <td>{{ item.purchase_date }}</td>
+                    <td>{{ item.expiry_date }}</td>
+                    <td>
+                        <span class="badge badge-{{ item.badge }}">
+                            {% if item.days_left < 0 %}
+                            <i class="fas fa-times-circle"></i> Expired ({{ item.days_left|abs }}d)
+                            {% elif item.days_left == 0 %}
+                            <i class="fas fa-clock"></i> Expires Today
+                            {% elif item.days_left <= 2 %}
+                            <i class="fas fa-fire"></i> {{ item.days_left }} days
+                            {% elif item.days_left <= 5 %}
+                            <i class="fas fa-clock"></i> {{ item.days_left }} days
+                            {% else %}
+                            <i class="fas fa-check-circle"></i> {{ item.days_left }} days
+                            {% endif %}
+                        </span>
+                    </td>
+                    <td>{{ (item.notes or '')[:30] }}{% if (item.notes or '')|length > 30 %}...{% endif %}</td>
+                    <td class="actions-row">
+                        <a href="/edit/{{ item.id }}" class="btn btn-sm btn-outline" title="Edit"><i class="fas fa-edit"></i></a>
+                        <form action="/consume/{{ item.id }}" method="POST" style="display:inline">
+                            <button type="submit" class="btn btn-sm btn-success" title="Consumed"><i class="fas fa-check"></i></button>
+                        </form>
+                        <form action="/waste/{{ item.id }}" method="POST" style="display:inline">
+                            <input type="hidden" name="reason" value="expired">
+                            <button type="submit" class="btn btn-sm btn-warning" title="Wasted"><i class="fas fa-trash"></i></button>
+                        </form>
+                        <form action="/delete/{{ item.id }}" method="POST" style="display:inline">
+                            <button type="submit" class="btn btn-sm btn-outline btn-delete" title="Delete"><i class="fas fa-times"></i></button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="empty-state">
+        <i class="fas fa-shopping-basket"></i>
+        <h3>Your inventory is empty</h3>
+        <p>Start adding food items to track their freshness.</p>
+        <a href="/add" class="btn btn-primary" style="margin-top: 16px;"><i class="fas fa-plus"></i> Add First Item</a>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

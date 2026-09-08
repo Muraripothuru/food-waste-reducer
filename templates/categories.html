@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block title %}Food Categories - Food Waste Reducer{% endblock %}
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1><i class="fas fa-tags" style="color: var(--primary);"></i> Food Categories</h1>
+        <p>Default shelf life and storage tips for each category</p>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h2>All Categories</h2>
+        <span class="badge badge-info">{{ categories|length }} categories</span>
+    </div>
+    <div class="category-grid">
+        {% for cat in categories %}
+        <div class="category-card">
+            <div class="category-header">
+                <h3><i class="fas {{ cat.icon }}"></i> {{ cat.name }}</h3>
+                <span class="badge badge-{% if cat.default_shelf_life_days <= 3 %}danger{% elif cat.default_shelf_life_days <= 7 %}warning{% else %}success{% endif %}">
+                    {{ cat.default_shelf_life_days }} days
+                </span>
+            </div>
+            <p class="shelf-life">
+                <i class="fas fa-clock"></i> Default shelf life: <strong>{{ cat.default_shelf_life_days }} days</strong>
+            </p>
+            <p class="tip">
+                <i class="fas fa-lightbulb"></i> {{ cat.storage_tip }}
+            </p>
+            <div class="shelf-bar">
+                <div style="background: {% if cat.default_shelf_life_days <= 3 %}var(--danger){% elif cat.default_shelf_life_days <= 7 %}var(--warning){% elif cat.default_shelf_life_days <= 30 %}var(--info){% else %}var(--primary){% endif %}; width: {% set width = (cat.default_shelf_life_days / 365 * 100)|int %}{% if width > 100 %}100{% else %}{{ width }}{% endif %}%;"></div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+<div class="card" style="margin-top: 24px;">
+    <div class="card-header">
+        <h2><i class="fas fa-info-circle" style="color: var(--info);"></i> Storage Tips</h2>
+    </div>
+    <div class="tips-grid">
+        <div class="tip-card tip-red">
+            <h4><i class="fas fa-fire"></i> Highly Perishable (1-3 days)</h4>
+            <p>Meat, seafood, leftovers. Use immediately or freeze. Always check freshness before cooking.</p>
+        </div>
+        <div class="tip-card tip-yellow">
+            <h4><i class="fas fa-clock"></i> Moderate (4-7 days)</h4>
+            <p>Dairy, vegetables, bread. Plan meals around these items within the first week.</p>
+        </div>
+        <div class="tip-card tip-blue">
+            <h4><i class="fas fa-box"></i> Long-lasting (30+ days)</h4>
+            <p>Canned goods, grains, condiments. Store in cool, dry places. Check dates periodically.</p>
+        </div>
+    </div>
+</div>
+{% endblock %}

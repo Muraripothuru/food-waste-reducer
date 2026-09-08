@@ -1,0 +1,228 @@
+{% extends "base.html" %}
+
+{% block title %}My Dashboard - FoodSaver{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div class="header-content">
+        <div class="user-welcome">
+            <div class="user-avatar-lg" style="background: {{ user.avatar_color }}">
+                {{ (user.full_name or user.username)[0]|upper }}
+            </div>
+            <div class="welcome-text">
+                <h1>Welcome, {{ user.full_name or user.username }}!</h1>
+                <p>Manage your food inventory and reduce waste</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="dashboard-grid">
+    <div class="stat-card animate-fade-in-up" style="animation-delay: 0.1s">
+        <div class="stat-icon" style="background: linear-gradient(135deg, #6366f1, #8b5cf6)">
+            <i class="fas fa-box"></i>
+        </div>
+        <div class="stat-info">
+            <h3>{{ user_stats.total_items }}</h3>
+            <p>Total Items</p>
+        </div>
+    </div>
+    
+    <div class="stat-card animate-fade-in-up" style="animation-delay: 0.2s">
+        <div class="stat-icon" style="background: linear-gradient(135deg, #10b981, #059669)">
+            <i class="fas fa-check-circle"></i>
+        </div>
+        <div class="stat-info">
+            <h3>{{ user_stats.consumed }}</h3>
+            <p>Consumed</p>
+        </div>
+    </div>
+    
+    <div class="stat-card animate-fade-in-up" style="animation-delay: 0.3s">
+        <div class="stat-icon" style="background: linear-gradient(135deg, #ef4444, #dc2626)">
+            <i class="fas fa-trash"></i>
+        </div>
+        <div class="stat-info">
+            <h3>{{ user_stats.wasted }}</h3>
+            <p>Wasted</p>
+        </div>
+    </div>
+    
+    <div class="stat-card animate-fade-in-up" style="animation-delay: 0.4s">
+        <div class="stat-icon" style="background: linear-gradient(135deg, #f59e0b, #d97706)">
+            <i class="fas fa-percentage"></i>
+        </div>
+        <div class="stat-info">
+            {% set total = user_stats.consumed + user_stats.wasted %}
+            <h3>{% if total > 0 %}{{ ((user_stats.consumed / total) * 100)|round(1) }}{% else %}0{% endif %}%</h3>
+            <p>Consumption Rate</p>
+        </div>
+    </div>
+</div>
+
+<div class="dashboard-sections">
+    <div class="section-card animate-fade-in-up" style="animation-delay: 0.5s">
+        <div class="section-header">
+            <h2><i class="fas fa-clock"></i> Expiring Soon</h2>
+            <a href="/items" class="view-all">View All <i class="fas fa-arrow-right"></i></a>
+        </div>
+        <div class="items-list">
+            {% if expiring_items %}
+                {% for item in expiring_items[:5] %}
+                <div class="item-row {% if item.days_left < 0 %}expired{% elif item.days_left <= 3 %}warning{% endif %}">
+                    <div class="item-details">
+                        <h4>{{ item.name }}</h4>
+                        <span class="item-category">{{ item.category_name }}</span>
+                    </div>
+                    <div class="item-expiry">
+                        {% if item.days_left < 0 %}
+                            <span class="badge badge-danger">Expired</span>
+                        {% elif item.days_left == 0 %}
+                            <span class="badge badge-warning">Today</span>
+                        {% elif item.days_left == 1 %}
+                            <span class="badge badge-warning">Tomorrow</span>
+                        {% else %}
+                            <span class="badge badge-info">{{ item.days_left }} days</span>
+                        {% endif %}
+                    </div>
+                    <div class="item-actions">
+                        <button class="btn-icon btn-success" onclick="markConsumed({{ item.id }})" title="Mark as Consumed">
+                            <i class="fas fa-check"></i>
+                        </button>
+                        <button class="btn-icon btn-danger" onclick="markWasted({{ item.id }})" title="Mark as Wasted">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </div>
+                </div>
+                {% endfor %}
+            {% else %}
+                <div class="empty-state">
+                    <i class="fas fa-check-circle"></i>
+                    <p>No items expiring soon! Great job!</p>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+    
+    <div class="section-card animate-fade-in-up" style="animation-delay: 0.6s">
+        <div class="section-header">
+            <h2><i class="fas fa-shopping-cart"></i> Shopping List</h2>
+            <a href="/shopping-list" class="view-all">View All <i class="fas fa-arrow-right"></i></a>
+        </div>
+        <div class="items-list">
+            {% if shopping_items %}
+                {% for item in shopping_items[:5] %}
+                <div class="item-row">
+                    <div class="item-details">
+                        <h4>{{ item.item_name }}</h4>
+                        <span class="item-category">{{ item.category or 'General' }}</span>
+                    </div>
+                    <div class="item-qty">{{ item.quantity }} {{ item.unit }}</div>
+                    <div class="item-actions">
+                        <button class="btn-icon btn-success" onclick="markPurchased({{ item.id }})" title="Mark as Purchased">
+                            <i class="fas fa-check"></i>
+                        </button>
+                    </div>
+                </div>
+                {% endfor %}
+            {% else %}
+                <div class="empty-state">
+                    <i class="fas fa-cart-plus"></i>
+                    <p>Your shopping list is empty</p>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<div class="settings-grid">
+    <div class="section-card animate-fade-in-up" style="animation-delay: 0.7s">
+        <div class="section-header">
+            <h2><i class="fas fa-bell"></i> Notifications</h2>
+        </div>
+        <div class="settings-content">
+            <div class="notification-box">
+                <div class="notif-info">
+                    <h4>Expiry Alerts</h4>
+                    <p>Get browser notifications when items are about to expire</p>
+                </div>
+                <button id="notificationToggle" class="btn btn-primary">
+                    <i class="fas fa-bell"></i> Enable Notifications
+                </button>
+            </div>
+            <div class="notif-info-text">
+                <i class="fas fa-info-circle"></i>
+                Notifications check every 30 seconds. You will be alerted for expired items and items expiring within 3 days.
+            </div>
+        </div>
+    </div>
+
+    <div class="section-card animate-fade-in-up" style="animation-delay: 0.8s">
+        <div class="section-header">
+            <h2><i class="fas fa-user-cog"></i> Account Settings</h2>
+        </div>
+        <div class="settings-content">
+            <form method="POST" action="/update-profile" class="settings-form">
+                <div class="form-group">
+                    <label>Full Name</label>
+                    <input type="text" name="full_name" value="{{ user.full_name or '' }}" placeholder="Your full name">
+                </div>
+                <div class="form-group">
+                    <label>Email</label>
+                    <input type="email" name="email" value="{{ user.email }}" placeholder="Your email">
+                </div>
+                <button type="submit" class="btn btn-primary">
+                    <i class="fas fa-save"></i> Save Changes
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <div class="section-card animate-fade-in-up" style="animation-delay: 0.9s">
+        <div class="section-header">
+            <h2><i class="fas fa-lock"></i> Change Password</h2>
+        </div>
+        <div class="settings-content">
+            <form method="POST" action="/change-password" class="settings-form">
+                <div class="form-group">
+                    <label>Current Password</label>
+                    <input type="password" name="old_password" required minlength="6">
+                </div>
+                <div class="form-group">
+                    <label>New Password</label>
+                    <input type="password" name="new_password" required minlength="6">
+                </div>
+                <button type="submit" class="btn btn-primary">
+                    <i class="fas fa-key"></i> Change Password
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <div class="section-card animate-fade-in-up" style="animation-delay: 1.0s">
+        <div class="section-header">
+            <h2><i class="fas fa-info-circle"></i> Account Info</h2>
+        </div>
+        <div class="settings-content">
+            <div class="account-info">
+                <div class="info-item">
+                    <span class="info-label">Username</span>
+                    <span class="info-value">{{ user.username }}</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Email</span>
+                    <span class="info-value">{{ user.email }}</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Member Since</span>
+                    <span class="info-value">{{ user.created_at[:10] if user.created_at else 'N/A' }}</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Last Login</span>
+                    <span class="info-value">{{ user.last_login[:16] if user.last_login else 'First Login' }}</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

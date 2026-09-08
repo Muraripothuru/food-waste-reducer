@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+{% block title %}Edit Item - Food Waste Reducer{% endblock %}
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1><i class="fas fa-edit" style="color: var(--warning);"></i> Edit Food Item</h1>
+        <p>Update item details for "{{ item.name }}"</p>
+    </div>
+</div>
+
+<div class="card" style="max-width: 700px;">
+    <form action="/edit/{{ item.id }}" method="POST">
+        <div class="form-group">
+            <label for="name">Food Name *</label>
+            <input type="text" id="name" name="name" value="{{ item.name }}" required>
+        </div>
+
+        <div class="form-row">
+            <div class="form-group">
+                <label for="category">Category *</label>
+                <select id="category" name="category" required>
+                    {% for cat in categories %}
+                    <option value="{{ cat.name }}" {% if item.category_name == cat.name %}selected{% endif %}>
+                        {{ cat.name }} ({{ cat.default_shelf_life_days }} days shelf life)
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="storage">Storage Location</label>
+                <select id="storage" name="storage">
+                    <option value="fridge" {% if item.storage_location == 'fridge' %}selected{% endif %}>Fridge</option>
+                    <option value="freezer" {% if item.storage_location == 'freezer' %}selected{% endif %}>Freezer</option>
+                    <option value="pantry" {% if item.storage_location == 'pantry' %}selected{% endif %}>Pantry</option>
+                    <option value="counter" {% if item.storage_location == 'counter' %}selected{% endif %}>Counter</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="form-row">
+            <div class="form-group">
+                <label for="purchase_date">Purchase Date *</label>
+                <input type="date" id="purchase_date" name="purchase_date" value="{{ item.purchase_date }}" required>
+            </div>
+            <div class="form-group">
+                <label for="expiry_date">Expiry Date *</label>
+                <input type="date" id="expiry_date" name="expiry_date" value="{{ item.expiry_date }}" required>
+            </div>
+        </div>
+
+        <div class="form-row">
+            <div class="form-group">
+                <label for="quantity">Quantity</label>
+                <input type="number" id="quantity" name="quantity" value="{{ item.quantity }}" min="0.1" step="0.1">
+            </div>
+            <div class="form-group">
+                <label for="unit">Unit</label>
+                <select id="unit" name="unit">
+                    <option value="pcs" {% if item.unit == 'pcs' %}selected{% endif %}>Pieces</option>
+                    <option value="kg" {% if item.unit == 'kg' %}selected{% endif %}>Kilograms</option>
+                    <option value="g" {% if item.unit == 'g' %}selected{% endif %}>Grams</option>
+                    <option value="L" {% if item.unit == 'L' %}selected{% endif %}>Liters</option>
+                    <option value="ml" {% if item.unit == 'ml' %}selected{% endif %}>Milliliters</option>
+                    <option value="oz" {% if item.unit == 'oz' %}selected{% endif %}>Ounces</option>
+                    <option value="lb" {% if item.unit == 'lb' %}selected{% endif %}>Pounds</option>
+                    <option value="pack" {% if item.unit == 'pack' %}selected{% endif %}>Pack</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label for="notes">Notes (optional)</label>
+            <textarea id="notes" name="notes" rows="3">{{ item.notes }}</textarea>
+        </div>
+
+        <div class="form-actions">
+            <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Save Changes</button>
+            <a href="/items" class="btn btn-outline">Cancel</a>
+        </div>
+    </form>
+    <form action="/delete/{{ item.id }}" method="POST" style="display:inline;">
+        <button type="submit" class="btn btn-danger" onclick="return confirm('Are you sure you want to delete this item?')">
+            <i class="fas fa-trash"></i> Delete
+        </button>
+    </form>
+</div>
+{% endblock %}

@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}FoodSaver{% endblock %}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🍃</text></svg>">
+</head>
+<body>
+    <nav class="sidebar">
+        <div class="logo">
+            <div class="logo-icon">
+                <i class="fas fa-leaf"></i>
+            </div>
+            <div class="logo-text">
+                <span>FoodSaver</span>
+                <small>Reduce Waste, Save Money</small>
+            </div>
+        </div>
+
+        <div class="nav-section-label">Main Menu</div>
+        <ul class="nav-links">
+            <li><a href="/" class="{% if request.path == '/' %}active{% endif %}"><i class="fas fa-home"></i> Dashboard</a></li>
+            <li><a href="/add" class="{% if request.path == '/add' %}active{% endif %}"><i class="fas fa-plus-circle"></i> Add Item</a></li>
+            <li><a href="/items" class="{% if request.path == '/items' %}active{% endif %}"><i class="fas fa-boxes"></i> Inventory</a></li>
+            <li><a href="/search" class="{% if request.path == '/search' %}active{% endif %}"><i class="fas fa-search"></i> Search</a></li>
+        </ul>
+
+        <div class="nav-section-label">Tools</div>
+        <ul class="nav-links">
+            <li><a href="/recipes" class="{% if request.path == '/recipes' %}active{% endif %}"><i class="fas fa-utensils"></i> Recipes</a></li>
+            <li><a href="/shopping-list" class="{% if request.path == '/shopping-list' %}active{% endif %}"><i class="fas fa-shopping-cart"></i> Shopping</a></li>
+            <li><a href="/stats" class="{% if request.path == '/stats' %}active{% endif %}"><i class="fas fa-chart-bar"></i> Statistics</a></li>
+            <li><a href="/categories" class="{% if request.path == '/categories' %}active{% endif %}"><i class="fas fa-tags"></i> Categories</a></li>
+        </ul>
+
+        <div class="sidebar-footer">
+            {% if user %}
+            <a href="/dashboard" class="user-profile {% if request.path == '/dashboard' %}active{% endif %}">
+                <div class="user-avatar" style="background: {{ user.avatar_color }}">
+                    {{ (user.full_name or user.username)[0]|upper }}
+                </div>
+                <div class="user-info">
+                    <span class="user-name">{{ user.full_name or user.username }}</span>
+                    <span class="user-email">{{ user.email }}</span>
+                </div>
+                <i class="fas fa-chevron-right user-arrow"></i>
+            </a>
+            {% endif %}
+
+            {% if expiring_count > 0 %}
+            <div class="alert-badge">
+                <i class="fas fa-exclamation-triangle"></i>
+                {{ expiring_count }} items expiring soon
+            </div>
+            {% endif %}
+
+            <div class="realtime-indicator">
+                <span class="realtime-dot"></span>
+                <span>Live Updates</span>
+            </div>
+
+            {% if user %}
+            <a href="/logout" class="btn-logout">
+                <i class="fas fa-sign-out-alt"></i> Sign Out
+            </a>
+            {% endif %}
+        </div>
+    </nav>
+
+    <main class="content">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ category }}">
+                        <i class="fas {% if category == 'success' %}fa-check-circle{% elif category == 'error' %}fa-exclamation-circle{% elif category == 'warning' %}fa-exclamation-triangle{% elif category == 'info' %}fa-info-circle{% else %}fa-info-circle{% endif %}"></i>
+                        <span>{{ message }}</span>
+                        <button class="alert-close" onclick="this.parentElement.remove()">&times;</button>
+                    </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
+        {% block content %}{% endblock %}
+    </main>
+
+    <script src="{{ url_for('static', filename='app.js') }}"></script>
+</body>
+</html>

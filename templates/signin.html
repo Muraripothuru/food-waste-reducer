@@ -1,0 +1,65 @@
+{% extends "auth_base.html" %}
+
+{% block title %}Sign In - FoodSaver{% endblock %}
+
+{% block auth_content %}
+<div class="auth-header">
+    <h2>Welcome Back</h2>
+    <p>Sign in to continue reducing food waste</p>
+</div>
+
+<form method="POST" action="/signin" class="auth-form" id="signinForm">
+    <div class="form-group animate-slide-in-right" style="animation-delay: 0.1s">
+        <div class="input-wrapper">
+            <i class="fas fa-user"></i>
+            <input type="text" name="username" placeholder="Username or Email" required>
+            <label>Username or Email</label>
+        </div>
+    </div>
+    
+    <div class="form-group animate-slide-in-right" style="animation-delay: 0.2s">
+        <div class="input-wrapper">
+            <i class="fas fa-lock"></i>
+            <input type="password" name="password" id="password" placeholder="Password" required>
+            <label>Password</label>
+            <button type="button" class="toggle-password" onclick="togglePassword('password')">
+                <i class="fas fa-eye"></i>
+            </button>
+        </div>
+    </div>
+    
+    <div class="form-options animate-slide-in-right" style="animation-delay: 0.3s">
+        <label class="checkbox-wrapper">
+            <input type="checkbox" name="remember">
+            <span class="checkmark"></span>
+            <span>Remember me</span>
+        </label>
+        <a href="#" class="forgot-password" onclick="showToast('Please contact support to reset your password.', 'info'); return false;">Forgot Password?</a>
+    </div>
+    
+    <button type="submit" class="btn-auth btn-primary animate-pulse" style="animation-delay: 0.4s">
+        <span>Sign In</span>
+        <i class="fas fa-arrow-right"></i>
+    </button>
+</form>
+
+<div class="auth-divider animate-fade-in-up" style="animation-delay: 0.5s">
+    <span>or continue with</span>
+</div>
+
+<div class="social-login animate-fade-in-up" style="animation-delay: 0.6s">
+    <button class="btn-social btn-google">
+        <i class="fab fa-google"></i>
+    </button>
+    <button class="btn-social btn-github">
+        <i class="fab fa-github"></i>
+    </button>
+    <button class="btn-social btn-apple">
+        <i class="fab fa-apple"></i>
+    </button>
+</div>
+
+<div class="auth-footer animate-fade-in-up" style="animation-delay: 0.7s">
+    <p>Don't have an account? <a href="/signup" class="auth-link">Sign Up</a></p>
+</div>
+{% endblock %}

@@ -1,0 +1,177 @@
+{% extends "base.html" %}
+{% block title %}Dashboard - Food Waste Reducer{% endblock %}
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>Dashboard</h1>
+        <p>Track your food inventory and reduce waste</p>
+    </div>
+    <div class="header-actions">
+        <div class="realtime-indicator">
+            <span class="realtime-dot"></span>
+            <span>Live</span>
+        </div>
+        <a href="/export" class="btn btn-outline"><i class="fas fa-download"></i> Export</a>
+        <a href="/add" class="btn btn-primary"><i class="fas fa-plus"></i> Add Item</a>
+    </div>
+</div>
+
+<div class="stats-grid">
+    <div class="stat-card">
+        <div class="stat-icon green"><i class="fas fa-boxes"></i></div>
+        <div class="stat-info">
+            <h3>{{ total_items }}</h3>
+            <p>Total Items</p>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon yellow"><i class="fas fa-clock"></i></div>
+        <div class="stat-info">
+            <h3>{{ expiring|length }}</h3>
+            <p>Expiring Soon</p>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon red"><i class="fas fa-exclamation-triangle"></i></div>
+        <div class="stat-info">
+            <h3>{{ expired|length }}</h3>
+            <p>Expired</p>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon blue"><i class="fas fa-leaf"></i></div>
+        <div class="stat-info">
+            <h3>{{ fresh|length }}</h3>
+            <p>Fresh (5+ days)</p>
+        </div>
+    </div>
+</div>
+
+<div class="grid-2">
+    <div class="card">
+        <div class="card-header">
+            <h2><i class="fas fa-exclamation-circle" style="color: var(--danger);"></i> Action Needed</h2>
+            {% if expiring %}
+            <a href="/recipes" class="btn btn-sm btn-primary"><i class="fas fa-utensils"></i> Get Recipes</a>
+            {% endif %}
+        </div>
+        {% if expiring %}
+        <div class="table-wrapper">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Item</th>
+                        <th>Category</th>
+                        <th>Expires</th>
+                        <th>Status</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in expiring %}
+                    <tr>
+                        <td><strong>{{ item.name }}</strong></td>
+                        <td>{{ item.category_name }}</td>
+                        <td>{{ item.expiry_date }}</td>
+                        <td>
+                            <span class="badge badge-{{ item.badge }}">
+                                <i class="fas {% if item.badge == 'danger' %}fa-times-circle{% elif item.badge == 'warning' %}fa-clock{% else %}fa-info-circle{% endif %}"></i>
+                                {{ item.status }}
+                            </span>
+                        </td>
+                        <td class="actions-row">
+                            <form action="/consume/{{ item.id }}" method="POST" style="display:inline">
+                                <button type="submit" class="btn btn-sm btn-success" title="Consumed"><i class="fas fa-check"></i></button>
+                            </form>
+                            <form action="/waste/{{ item.id }}" method="POST" style="display:inline">
+                                <input type="hidden" name="reason" value="expired">
+                                <button type="submit" class="btn btn-sm btn-danger" title="Wasted"><i class="fas fa-trash"></i></button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="empty-state">
+            <i class="fas fa-check-circle"></i>
+            <h3>All good!</h3>
+            <p>No items expiring soon.</p>
+        </div>
+        {% endif %}
+    </div>
+
+    <div class="card score-card">
+        <div class="card-header" style="justify-content: center;">
+            <h2><i class="fas fa-chart-line" style="color: var(--primary);"></i> Waste Score</h2>
+        </div>
+        <div class="score-circle score-{{ score.grade }}">
+            <span class="score-value">{{ score.score }}</span>
+            <small>/100</small>
+            <span class="score-grade">{{ score.grade }}</span>
+        </div>
+        <p class="score-message">{{ score.message }}</p>
+        <a href="/stats" class="btn btn-primary"><i class="fas fa-chart-bar"></i> View Details</a>
+    </div>
+</div>
+
+<div class="card" style="margin-top: 24px;">
+    <div class="card-header">
+        <h2><i class="fas fa-box-open" style="color: var(--info);"></i> Recent Inventory</h2>
+        <a href="/items" class="btn btn-outline btn-sm">View All <i class="fas fa-arrow-right"></i></a>
+    </div>
+    {% if items %}
+    <div class="table-wrapper">
+        <table>
+            <thead>
+                <tr>
+                    <th>Item</th>
+                    <th>Category</th>
+                    <th>Quantity</th>
+                    <th>Storage</th>
+                    <th>Expiry Date</th>
+                    <th>Status</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in items[:8] %}
+                <tr>
+                    <td><strong>{{ item.name }}</strong></td>
+                    <td><i class="fas {{ item.category_icon }}"></i> {{ item.category_name }}</td>
+                    <td>{{ item.quantity }} {{ item.unit }}</td>
+                    <td><i class="fas fa-map-marker-alt"></i> {{ item.storage_location }}</td>
+                    <td>{{ item.expiry_date }}</td>
+                    <td>
+                        <span class="badge badge-{{ item.badge }}">
+                            {% if item.days_left < 0 %}Expired {{ item.days_left|abs }}d
+                            {% elif item.days_left == 0 %}Today
+                            {% else %}{{ item.days_left }}d{% endif %}
+                        </span>
+                    </td>
+                    <td class="actions-row">
+                        <a href="/edit/{{ item.id }}" class="btn btn-sm btn-outline" title="Edit"><i class="fas fa-edit"></i></a>
+                        <form action="/consume/{{ item.id }}" method="POST" style="display:inline">
+                            <button type="submit" class="btn btn-sm btn-success" title="Consumed"><i class="fas fa-check"></i></button>
+                        </form>
+                        <form action="/waste/{{ item.id }}" method="POST" style="display:inline">
+                            <input type="hidden" name="reason" value="expired">
+                            <button type="submit" class="btn btn-sm btn-warning" title="Wasted"><i class="fas fa-trash"></i></button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="empty-state">
+        <i class="fas fa-shopping-basket"></i>
+        <h3>No items yet</h3>
+        <p>Start by adding food items to your inventory.</p>
+        <a href="/add" class="btn btn-primary" style="margin-top: 16px;"><i class="fas fa-plus"></i> Add First Item</a>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

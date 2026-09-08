@@ -1,0 +1,207 @@
+{% extends "base.html" %}
+{% block title %}Statistics - Food Waste Reducer{% endblock %}
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1><i class="fas fa-chart-bar" style="color: var(--info);"></i> Waste Statistics</h1>
+        <p>Track your food waste reduction progress</p>
+    </div>
+    <div class="header-actions">
+        <div class="btn-group">
+            <a href="/stats?days=7" class="btn btn-sm {% if days == 7 %}btn-primary{% else %}btn-outline{% endif %}">7 Days</a>
+            <a href="/stats?days=30" class="btn btn-sm {% if days == 30 %}btn-primary{% else %}btn-outline{% endif %}">30 Days</a>
+            <a href="/stats?days=90" class="btn btn-sm {% if days == 90 %}btn-primary{% else %}btn-outline{% endif %}">90 Days</a>
+        </div>
+    </div>
+</div>
+
+<div class="stats-grid">
+    <div class="stat-card">
+        <div class="stat-icon red"><i class="fas fa-trash"></i></div>
+        <div class="stat-info">
+            <h3>{{ waste_stats.total_items_wasted }}</h3>
+            <p>Items Wasted ({{ days }}d)</p>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon yellow"><i class="fas fa-dollar-sign"></i></div>
+        <div class="stat-info">
+            <h3>${{ waste_stats.total_cost_lost }}</h3>
+            <p>Money Lost</p>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon green"><i class="fas fa-trophy"></i></div>
+        <div class="stat-info">
+            <h3>{{ score.score }}/100</h3>
+            <p>Waste Score</p>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon blue"><i class="fas fa-calendar"></i></div>
+        <div class="stat-info">
+            <h3>{{ days }}</h3>
+            <p>Days Tracked</p>
+        </div>
+    </div>
+</div>
+
+<div class="grid-2">
+    <div class="card">
+        <div class="card-header">
+            <h2><i class="fas fa-trophy" style="color: var(--warning);"></i> Your Score</h2>
+        </div>
+        <div class="score-section">
+            <div class="score-circle score-{{ score.grade }}">
+                <span class="score-value">{{ score.score }}</span>
+                <small>/100</small>
+                <span class="score-grade">{{ score.grade }}</span>
+            </div>
+            <p class="score-message">{{ score.message }}</p>
+        </div>
+        <div class="score-explanation">
+            <p><strong>How it works:</strong></p>
+            <ul>
+                <li>Score starts at 100</li>
+                <li>Points deducted for each wasted item</li>
+                <li>Higher score = less waste</li>
+                <li>Track over time to see improvement</li>
+            </ul>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-header">
+            <h2><i class="fas fa-list" style="color: var(--danger);"></i> Waste by Reason</h2>
+        </div>
+        {% if waste_stats.waste_by_reason %}
+        {% for reason in waste_stats.waste_by_reason %}
+        <div class="reason-item">
+            <div>
+                <span class="badge badge-{% if reason.reason == 'expired' %}danger{% elif reason.reason == 'spoiled' %}warning{% else %}info{% endif %}">
+                    {{ reason.reason|capitalize }}
+                </span>
+            </div>
+            <div class="reason-bar">
+                <div class="bar">
+                    <div style="background: var(--danger); width: {% if waste_stats.total_items_wasted > 0 %}{{ (reason.count / waste_stats.total_items_wasted * 100)|int }}{% else %}0{% endif %}%;"></div>
+                </div>
+                <span>{{ reason.count }} items</span>
+            </div>
+        </div>
+        {% endfor %}
+        {% else %}
+        <div class="empty-state" style="padding: 30px;">
+            <i class="fas fa-check-circle" style="font-size: 36px;"></i>
+            <h3>No waste recorded</h3>
+            <p>Keep it up! You're doing great.</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<div class="card" style="margin-top: 24px;">
+    <div class="card-header">
+        <h2><i class="fas fa-chart-line" style="color: var(--primary);"></i> Daily Waste Trend</h2>
+    </div>
+    <div class="chart-container">
+        <canvas id="wasteChart"></canvas>
+    </div>
+</div>
+
+<div class="card" style="margin-top: 24px;">
+    <div class="card-header">
+        <h2><i class="fas fa-lightbulb" style="color: var(--warning);"></i> Tips to Improve</h2>
+    </div>
+    <div class="tips-grid">
+        <div class="tip-card tip-green">
+            <h4><i class="fas fa-list-check"></i> Plan Meals</h4>
+            <p>Plan your meals for the week before shopping to buy only what you need.</p>
+        </div>
+        <div class="tip-card tip-yellow">
+            <h4><i class="fas fa-clock"></i> First-In-First-Out</h4>
+            <p>Place newer items behind older ones so you use older food first.</p>
+        </div>
+        <div class="tip-card tip-blue">
+            <h4><i class="fas fa-snowflake"></i> Freeze Surplus</h4>
+            <p>Freeze bread, meat, and vegetables before they expire for later use.</p>
+        </div>
+        <div class="tip-card tip-red">
+            <h4><i class="fas fa-eye"></i> Check Daily</h4>
+            <p>Spend 30 seconds checking your fridge daily to spot items about to expire.</p>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+const ctx = document.getElementById('wasteChart').getContext('2d');
+const dailyData = {{ daily_waste|tojson }};
+
+const labels = dailyData.map(d => {
+    const date = new Date(d.date);
+    return date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+});
+const counts = dailyData.map(d => d.count);
+const costs = dailyData.map(d => d.cost);
+
+new Chart(ctx, {
+    type: 'line',
+    data: {
+        labels: labels,
+        datasets: [{
+            label: 'Items Wasted',
+            data: counts,
+            borderColor: '#ef4444',
+            backgroundColor: 'rgba(239, 68, 68, 0.1)',
+            fill: true,
+            tension: 0.4,
+            pointBackgroundColor: '#ef4444',
+            pointBorderColor: '#fff',
+            pointBorderWidth: 2,
+            pointRadius: 5
+        }, {
+            label: 'Cost Lost ($)',
+            data: costs,
+            borderColor: '#f59e0b',
+            backgroundColor: 'rgba(245, 158, 11, 0.1)',
+            fill: true,
+            tension: 0.4,
+            pointBackgroundColor: '#f59e0b',
+            pointBorderColor: '#fff',
+            pointBorderWidth: 2,
+            pointRadius: 5
+        }]
+    },
+    options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+            legend: {
+                position: 'top',
+            },
+            tooltip: {
+                backgroundColor: '#1e293b',
+                titleColor: '#fff',
+                bodyColor: '#fff',
+                padding: 12,
+                cornerRadius: 8
+            }
+        },
+        scales: {
+            y: {
+                beginAtZero: true,
+                grid: {
+                    color: '#e2e8f0'
+                }
+            },
+            x: {
+                grid: {
+                    display: false
+                }
+            }
+        }
+    }
+});
+</script>
+{% endblock %}

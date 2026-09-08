@@ -1,0 +1,146 @@
+{% extends "base.html" %}
+{% block title %}Shopping List - Food Waste Reducer{% endblock %}
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1><i class="fas fa-shopping-cart" style="color: var(--primary);"></i> Shopping List</h1>
+        <p>Manage your shopping and avoid food waste</p>
+    </div>
+</div>
+
+{% if expiring %}
+<div class="card" style="margin-bottom: 24px; border-left: 4px solid var(--danger);">
+    <div class="card-header">
+        <h2><i class="fas fa-exclamation-triangle" style="color: var(--danger);"></i> Use These First</h2>
+    </div>
+    <p style="color: var(--text-light); margin-bottom: 16px;">Consider using these expiring items before buying more:</p>
+    <div class="expiring-grid">
+        {% for item in expiring %}
+        <div class="expiring-item">
+            <div>
+                <strong>{{ item.name }}</strong>
+                <p>{{ item.category_name }} | Expires: {{ item.expiry_date }}</p>
+            </div>
+            <form action="/consume/{{ item.id }}" method="POST">
+                <button type="submit" class="btn btn-sm btn-success"><i class="fas fa-check"></i></button>
+            </form>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+
+<div class="card" style="margin-bottom: 24px;">
+    <div class="card-header">
+        <h2><i class="fas fa-plus-circle" style="color: var(--primary);"></i> Add to Shopping List</h2>
+    </div>
+    <form action="/shopping/add" method="POST">
+        <div class="form-row">
+            <div class="form-group">
+                <label for="name">Item Name *</label>
+                <input type="text" id="name" name="name" placeholder="e.g., Milk, Eggs" required>
+            </div>
+            <div class="form-group">
+                <label for="category">Category</label>
+                <select id="category" name="category">
+                    <option value="">Select category</option>
+                    <option value="Dairy">Dairy</option>
+                    <option value="Meat">Meat</option>
+                    <option value="Vegetables">Vegetables</option>
+                    <option value="Fruits">Fruits</option>
+                    <option value="Bread">Bread</option>
+                    <option value="Grains">Grains</option>
+                    <option value="Other">Other</option>
+                </select>
+            </div>
+        </div>
+        <div class="form-row">
+            <div class="form-group">
+                <label for="quantity">Quantity</label>
+                <input type="number" id="quantity" name="quantity" value="1" min="0.1" step="0.1">
+            </div>
+            <div class="form-group">
+                <label for="unit">Unit</label>
+                <select id="unit" name="unit">
+                    <option value="pcs">Pieces</option>
+                    <option value="kg">Kilograms</option>
+                    <option value="L">Liters</option>
+                    <option value="pack">Pack</option>
+                </select>
+            </div>
+        </div>
+        <button type="submit" class="btn btn-primary"><i class="fas fa-plus"></i> Add to List</button>
+    </form>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h2><i class="fas fa-list" style="color: var(--info);"></i> My Shopping List</h2>
+        <button onclick="window.print()" class="btn btn-outline btn-sm"><i class="fas fa-print"></i> Print</button>
+    </div>
+
+    {% if shopping_items %}
+    <div class="table-wrapper">
+        <table>
+            <thead>
+                <tr>
+                    <th>Item</th>
+                    <th>Category</th>
+                    <th>Quantity</th>
+                    <th>Added</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in shopping_items %}
+                <tr>
+                    <td><strong>{{ item.item_name }}</strong></td>
+                    <td>{{ item.category or '-' }}</td>
+                    <td>{{ item.quantity }} {{ item.unit }}</td>
+                    <td>{{ item.created_at[:10] }}</td>
+                    <td class="actions-row">
+                        <form action="/shopping/purchase/{{ item.id }}" method="POST" style="display:inline">
+                            <button type="submit" class="btn btn-sm btn-success" title="Purchased"><i class="fas fa-check"></i></button>
+                        </form>
+                        <form action="/shopping/delete/{{ item.id }}" method="POST" style="display:inline">
+                            <button type="submit" class="btn btn-sm btn-outline btn-delete" title="Remove"><i class="fas fa-times"></i></button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="empty-state">
+        <i class="fas fa-shopping-cart"></i>
+        <h3>Your shopping list is empty</h3>
+        <p>Add items using the form above.</p>
+    </div>
+    {% endif %}
+</div>
+
+<div class="card" style="margin-top: 24px;">
+    <div class="card-header">
+        <h2><i class="fas fa-lightbulb" style="color: var(--warning);"></i> Smart Shopping Tips</h2>
+    </div>
+    <div class="tips-grid">
+        <div class="tip-card tip-green">
+            <h4><i class="fas fa-list-check"></i> Make a List</h4>
+            <p>Always shop with a list to avoid impulse purchases.</p>
+        </div>
+        <div class="tip-card tip-yellow">
+            <h4><i class="fas fa-clock"></i> Shop Frequently</h4>
+            <p>Buy perishables in smaller quantities more often.</p>
+        </div>
+        <div class="tip-card tip-blue">
+            <h4><i class="fas fa-calendar"></i> Plan Meals</h4>
+            <p>Plan your weekly meals before shopping.</p>
+        </div>
+        <div class="tip-card tip-red">
+            <h4><i class="fas fa-eye"></i> Check Inventory</h4>
+            <p>Check what you already have before going to the store.</p>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,675 @@
+from flask import Flask, render_template, request, redirect, url_for, jsonify, flash, Response, session, g
+from datetime import datetime, timedelta
+from database import FoodDatabase
+from analyzer import FoodAnalyzer
+import csv
+import io
+import os
+import secrets
+import logging
+from functools import wraps
+
+app = Flask(__name__)
+
+app.config.update(
+    SECRET_KEY=os.environ.get("SECRET_KEY", secrets.token_hex(32)),
+    SESSION_COOKIE_HTTPONLY=True,
+    SESSION_COOKIE_SAMESITE='Lax',
+    PERMANENT_SESSION_LIFETIME=timedelta(days=7),
+    MAX_CONTENT_LENGTH=1 * 1024 * 1024,
+)
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+db = FoodDatabase()
+analyzer = FoodAnalyzer(db)
+
+
+def login_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if "user_id" not in session:
+            flash("Please sign in to continue.", "warning")
+            return redirect(url_for("signin"))
+        return f(*args, **kwargs)
+    return decorated_function
+
+
+def get_user_id():
+    return session.get("user_id")
+
+
+@app.before_request
+def before_request():
+    g.request_start = datetime.now()
+
+
+@app.after_request
+def after_request(response):
+    response.headers['X-Content-Type-Options'] = 'nosniff'
+    response.headers['X-Frame-Options'] = 'SAMEORIGIN'
+    response.headers['X-XSS-Protection'] = '1; mode=block'
+    response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+    return response
+
+
+@app.context_processor
+def inject_globals():
+    user_id = get_user_id()
+    expiring_count = 0
+    user = None
+    try:
+        expiring_count = len(db.get_expiring_items(3, user_id))
+        if user_id:
+            user = db.get_user_by_id(user_id)
+    except Exception as e:
+        logger.error(f"inject_globals error: {e}")
+    return {"expiring_count": expiring_count, "user": user}
+
+
+@app.errorhandler(404)
+def page_not_found(e):
+    return render_template("error.html", code=404, message="Page not found"), 404
+
+
+@app.errorhandler(500)
+def internal_error(e):
+    return render_template("error.html", code=500, message="Something went wrong"), 500
+
+
+@app.errorhandler(413)
+def too_large(e):
+    flash("File too large. Maximum size is 1MB.", "error")
+    return redirect(request.referrer or url_for("dashboard"))
+
+
+# ==================== AUTH ROUTES ====================
+
+@app.route("/signup", methods=["GET", "POST"])
+def signup():
+    if "user_id" in session:
+        return redirect(url_for("user_dashboard"))
+
+    if request.method == "POST":
+        full_name = request.form.get("full_name", "").strip()
+        username = request.form.get("username", "").strip()
+        email = request.form.get("email", "").strip()
+        password = request.form.get("password", "")
+        confirm_password = request.form.get("confirm_password", "")
+
+        if not all([username, email, password]):
+            flash("Please fill in all required fields.", "error")
+            return render_template("signup.html")
+
+        if len(username) < 3:
+            flash("Username must be at least 3 characters.", "error")
+            return render_template("signup.html")
+
+        if not all(c.isalnum() or c in '-_' for c in username):
+            flash("Username can only contain letters, numbers, hyphens and underscores.", "error")
+            return render_template("signup.html")
+
+        if '@' not in email or '.' not in email:
+            flash("Please enter a valid email address.", "error")
+            return render_template("signup.html")
+
+        if password != confirm_password:
+            flash("Passwords do not match.", "error")
+            return render_template("signup.html")
+
+        if len(password) < 6:
+            flash("Password must be at least 6 characters.", "error")
+            return render_template("signup.html")
+
+        result = db.create_user(username, email, password, full_name)
+
+        if result["success"]:
+            flash("Account created successfully! Please sign in.", "success")
+            return redirect(url_for("signin"))
+        else:
+            flash(result["message"], "error")
+
+    return render_template("signup.html")
+
+
+@app.route("/signin", methods=["GET", "POST"])
+def signin():
+    if "user_id" in session:
+        return redirect(url_for("user_dashboard"))
+
+    if request.method == "POST":
+        username = request.form.get("username", "").strip()
+        password = request.form.get("password", "")
+
+        if not username or not password:
+            flash("Please enter username and password.", "error")
+            return render_template("signin.html")
+
+        result = db.authenticate_user(username, password)
+
+        if result["success"]:
+            session.permanent = True
+            session["user_id"] = result["user"]["id"]
+            session["username"] = result["user"]["username"]
+            flash(f"Welcome back, {result['user']['username']}!", "success")
+            return redirect(url_for("user_dashboard"))
+        else:
+            flash(result["message"], "error")
+
+    return render_template("signin.html")
+
+
+@app.route("/logout")
+def logout():
+    session.clear()
+    flash("You have been logged out.", "info")
+    return redirect(url_for("signin"))
+
+
+@app.route("/dashboard")
+@login_required
+def user_dashboard():
+    user_id = get_user_id()
+    try:
+        user = db.get_user_by_id(user_id)
+        user_stats = db.get_user_stats(user_id)
+        expiring_items = db.get_expiring_items(3, user_id)
+        shopping_items = db.get_shopping_items(user_id)
+
+        today = datetime.now().date()
+        for item in expiring_items:
+            item["days_left"] = (datetime.strptime(item["expiry_date"], "%Y-%m-%d").date() - today).days
+
+        return render_template("user_dashboard.html",
+                              user=user, user_stats=user_stats,
+                              expiring_items=expiring_items,
+                              shopping_items=shopping_items)
+    except Exception as e:
+        logger.error(f"Dashboard error: {e}")
+        flash("An error occurred loading your dashboard.", "error")
+        return redirect(url_for("dashboard"))
+
+
+@app.route("/update-profile", methods=["POST"])
+@login_required
+def update_profile():
+    full_name = request.form.get("full_name", "").strip()
+    email = request.form.get("email", "").strip()
+
+    if not email or '@' not in email:
+        flash("Please enter a valid email.", "error")
+        return redirect(url_for("user_dashboard"))
+
+    if db.update_user_profile(session["user_id"], full_name, email):
+        flash("Profile updated successfully!", "success")
+    else:
+        flash("Email already in use.", "error")
+
+    return redirect(url_for("user_dashboard"))
+
+
+@app.route("/change-password", methods=["POST"])
+@login_required
+def change_password():
+    old_password = request.form.get("old_password", "")
+    new_password = request.form.get("new_password", "")
+
+    if not old_password or not new_password:
+        flash("Please fill in both password fields.", "error")
+        return redirect(url_for("user_dashboard"))
+
+    if len(new_password) < 6:
+        flash("New password must be at least 6 characters.", "error")
+        return redirect(url_for("user_dashboard"))
+
+    result = db.change_password(session["user_id"], old_password, new_password)
+
+    if result["success"]:
+        flash("Password changed successfully!", "success")
+    else:
+        flash(result["message"], "error")
+
+    return redirect(url_for("user_dashboard"))
+
+
+# ==================== MAIN APP ROUTES ====================
+
+@app.route("/")
+@login_required
+def dashboard():
+    user_id = get_user_id()
+    try:
+        items = db.get_all_items(user_id)
+        expiring = db.get_expiring_items(3, user_id)
+        today = datetime.now().date()
+
+        expired = []
+        fresh = []
+        for i in items:
+            days_left = (datetime.strptime(i["expiry_date"], "%Y-%m-%d").date() - today).days
+            i["days_left"] = days_left
+            status, badge, _ = analyzer.get_expiry_status(i["expiry_date"])
+            i["status"] = status
+            i["badge"] = badge
+            if days_left < 0:
+                expired.append(i)
+            elif days_left >= 5:
+                fresh.append(i)
+
+        for i in expiring:
+            days_left = (datetime.strptime(i["expiry_date"], "%Y-%m-%d").date() - today).days
+            i["days_left"] = days_left
+            status, badge, _ = analyzer.get_expiry_status(i["expiry_date"])
+            i["status"] = status
+            i["badge"] = badge
+
+        score = analyzer.calculate_waste_reduction_score(user_id)
+        stats = db.get_waste_stats(30, user_id)
+
+        return render_template("dashboard.html",
+                               items=items, expiring=expiring, expired=expired,
+                               fresh=fresh, score=score, stats=stats,
+                               total_items=len(items))
+    except Exception as e:
+        logger.error(f"Dashboard error: {e}")
+        flash("An error occurred loading the dashboard.", "error")
+        return render_template("dashboard.html", items=[], expiring=[], expired=[],
+                               fresh=[], score={"score": 0, "message": "Error", "grade": "N/A"},
+                               stats={"total_items_wasted": 0, "total_cost_lost": 0}, total_items=0)
+
+
+@app.route("/add", methods=["GET", "POST"])
+@login_required
+def add_item():
+    categories = db.get_categories()
+    if request.method == "POST":
+        try:
+            name = request.form["name"].strip()
+            category = request.form["category"]
+            purchase_date = request.form["purchase_date"]
+            expiry_date = request.form["expiry_date"]
+            try:
+                quantity = float(request.form.get("quantity", 1))
+            except (ValueError, TypeError):
+                quantity = 1
+            unit = request.form.get("unit", "pcs")
+            storage = request.form.get("storage", "fridge")
+            notes = request.form.get("notes", "").strip()
+
+            if not name or not expiry_date:
+                flash("Name and expiry date are required!", "error")
+                return redirect(url_for("add_item"))
+
+            if len(name) > 200:
+                flash("Name must be 200 characters or less.", "error")
+                return redirect(url_for("add_item"))
+
+            db.add_item(name, category, purchase_date, expiry_date,
+                        quantity, unit, storage, notes, get_user_id())
+            flash(f"Added {name} successfully!", "success")
+            return redirect(url_for("dashboard"))
+        except KeyError as e:
+            flash(f"Missing required field: {e}", "error")
+            return redirect(url_for("add_item"))
+        except Exception as e:
+            logger.error(f"Add item error: {e}")
+            flash("An error occurred adding the item.", "error")
+            return redirect(url_for("add_item"))
+
+    today = datetime.now().date().isoformat()
+    return render_template("add.html", categories=categories, today=today)
+
+
+@app.route("/items")
+@login_required
+def view_items():
+    user_id = get_user_id()
+    try:
+        items = db.get_all_items(user_id)
+        today = datetime.now().date()
+        for item in items:
+            days_left = (datetime.strptime(item["expiry_date"], "%Y-%m-%d").date() - today).days
+            item["days_left"] = days_left
+            status, badge, _ = analyzer.get_expiry_status(item["expiry_date"])
+            item["status"] = status
+            item["badge"] = badge
+        return render_template("items.html", items=items)
+    except Exception as e:
+        logger.error(f"View items error: {e}")
+        flash("An error occurred loading items.", "error")
+        return render_template("items.html", items=[])
+
+
+@app.route("/edit/<int:item_id>", methods=["GET", "POST"])
+@login_required
+def edit_item(item_id):
+    user_id = get_user_id()
+    categories = db.get_categories()
+    if request.method == "POST":
+        try:
+            name = request.form["name"].strip()
+            category = request.form["category"]
+            purchase_date = request.form["purchase_date"]
+            expiry_date = request.form["expiry_date"]
+            try:
+                quantity = float(request.form.get("quantity", 1))
+            except (ValueError, TypeError):
+                quantity = 1
+            unit = request.form.get("unit", "pcs")
+            storage = request.form.get("storage", "fridge")
+            notes = request.form.get("notes", "").strip()
+
+            if db.update_item(item_id, name, category, purchase_date, expiry_date,
+                              quantity, unit, storage, notes, user_id):
+                flash("Item updated successfully!", "success")
+            else:
+                flash("Item not found.", "error")
+            return redirect(url_for("view_items"))
+        except Exception as e:
+            logger.error(f"Edit item error: {e}")
+            flash("An error occurred updating the item.", "error")
+            return redirect(url_for("view_items"))
+
+    item = db.get_item_by_id(item_id, user_id)
+    if not item:
+        flash("Item not found.", "error")
+        return redirect(url_for("view_items"))
+    return render_template("edit.html", item=item, categories=categories)
+
+
+@app.route("/consume/<int:item_id>", methods=["POST"])
+@login_required
+def consume_item(item_id):
+    try:
+        db.mark_consumed(item_id, get_user_id())
+        flash("Item marked as consumed!", "success")
+    except Exception as e:
+        logger.error(f"Consume error: {e}")
+        flash("An error occurred.", "error")
+    return redirect(request.referrer or url_for("view_items"))
+
+
+@app.route("/waste/<int:item_id>", methods=["POST"])
+@login_required
+def waste_item(item_id):
+    try:
+        reason = request.form.get("reason", "expired")
+        try:
+            cost = float(request.form.get("cost", 0))
+        except (ValueError, TypeError):
+            cost = 0
+        db.mark_wasted(item_id, reason, cost, get_user_id())
+        flash("Item marked as wasted.", "warning")
+    except Exception as e:
+        logger.error(f"Waste error: {e}")
+        flash("An error occurred.", "error")
+    return redirect(request.referrer or url_for("view_items"))
+
+
+@app.route("/delete/<int:item_id>", methods=["POST"])
+@login_required
+def delete_item(item_id):
+    try:
+        db.delete_item(item_id, get_user_id())
+        flash("Item deleted.", "info")
+    except Exception as e:
+        logger.error(f"Delete error: {e}")
+        flash("An error occurred.", "error")
+    return redirect(request.referrer or url_for("view_items"))
+
+
+@app.route("/search")
+@login_required
+def search_items():
+    user_id = get_user_id()
+    try:
+        query = request.args.get("q", "").strip()
+        category = request.args.get("category", "")
+        storage = request.args.get("storage", "")
+        status = request.args.get("status", "")
+
+        items = db.search_items(query, category, storage, status, user_id)
+        today = datetime.now().date()
+        for item in items:
+            days_left = (datetime.strptime(item["expiry_date"], "%Y-%m-%d").date() - today).days
+            item["days_left"] = days_left
+            exp_status, badge, _ = analyzer.get_expiry_status(item["expiry_date"])
+            item["status"] = exp_status
+            item["badge"] = badge
+
+        categories = db.get_categories()
+        return render_template("search.html", items=items, categories=categories,
+                               query=query, selected_category=category,
+                               selected_storage=storage, selected_status=status)
+    except Exception as e:
+        logger.error(f"Search error: {e}")
+        flash("An error occurred searching.", "error")
+        return render_template("search.html", items=[], categories=[], query="",
+                               selected_category="", selected_storage="", selected_status="")
+
+
+@app.route("/stats")
+@login_required
+def stats():
+    user_id = get_user_id()
+    try:
+        days = int(request.args.get("days", 30))
+        if days not in [7, 30, 90, 365]:
+            days = 30
+        waste_stats = db.get_waste_stats(days, user_id)
+        daily_waste = db.get_daily_waste(7, user_id)
+        score = analyzer.calculate_waste_reduction_score(user_id)
+        return render_template("stats.html", waste_stats=waste_stats, score=score,
+                               days=days, daily_waste=daily_waste)
+    except Exception as e:
+        logger.error(f"Stats error: {e}")
+        flash("An error occurred loading statistics.", "error")
+        return redirect(url_for("dashboard"))
+
+
+@app.route("/recipes")
+@login_required
+def recipes():
+    user_id = get_user_id()
+    try:
+        expiring = analyzer.get_priority_items(user_id)
+        recipe = analyzer.suggest_recipe(expiring) if expiring else None
+        categories = db.get_categories()
+        return render_template("recipes.html", expiring=expiring, recipe=recipe, categories=categories)
+    except Exception as e:
+        logger.error(f"Recipes error: {e}")
+        flash("An error occurred loading recipes.", "error")
+        return redirect(url_for("dashboard"))
+
+
+@app.route("/categories")
+@login_required
+def categories():
+    try:
+        cats = db.get_categories()
+        return render_template("categories.html", categories=cats)
+    except Exception as e:
+        logger.error(f"Categories error: {e}")
+        flash("An error occurred loading categories.", "error")
+        return redirect(url_for("dashboard"))
+
+
+@app.route("/shopping-list")
+@login_required
+def shopping_list():
+    user_id = get_user_id()
+    try:
+        expiring = analyzer.get_priority_items(user_id)
+        shopping_items = db.get_shopping_items(user_id)
+        return render_template("shopping.html", expiring=expiring, shopping_items=shopping_items)
+    except Exception as e:
+        logger.error(f"Shopping list error: {e}")
+        flash("An error occurred loading shopping list.", "error")
+        return render_template("shopping.html", expiring=[], shopping_items=[])
+
+
+@app.route("/shopping/add", methods=["POST"])
+@login_required
+def add_shopping_item():
+    try:
+        name = request.form.get("name", "").strip()
+        category = request.form.get("category", "")
+        try:
+            quantity = float(request.form.get("quantity", 1))
+        except (ValueError, TypeError):
+            quantity = 1
+        unit = request.form.get("unit", "pcs")
+        if name:
+            db.add_shopping_item(name, category, quantity, unit, get_user_id())
+            flash("Added to shopping list!", "success")
+        else:
+            flash("Please enter an item name.", "error")
+    except Exception as e:
+        logger.error(f"Add shopping error: {e}")
+        flash("An error occurred.", "error")
+    return redirect(url_for("shopping_list"))
+
+
+@app.route("/shopping/purchase/<int:item_id>", methods=["POST"])
+@login_required
+def purchase_shopping_item(item_id):
+    try:
+        db.mark_shopping_purchased(item_id, get_user_id())
+        flash("Item marked as purchased!", "success")
+    except Exception as e:
+        logger.error(f"Purchase error: {e}")
+        flash("An error occurred.", "error")
+    return redirect(url_for("shopping_list"))
+
+
+@app.route("/shopping/delete/<int:item_id>", methods=["POST"])
+@login_required
+def delete_shopping_item(item_id):
+    try:
+        db.delete_shopping_item(item_id, get_user_id())
+        flash("Removed from shopping list.", "info")
+    except Exception as e:
+        logger.error(f"Delete shopping error: {e}")
+        flash("An error occurred.", "error")
+    return redirect(url_for("shopping_list"))
+
+
+@app.route("/export")
+@login_required
+def export_csv():
+    user_id = get_user_id()
+    try:
+        items = db.get_all_items(user_id)
+        output = io.StringIO()
+        writer = csv.writer(output)
+        writer.writerow(["ID", "Name", "Category", "Quantity", "Unit", "Storage", "Purchase Date", "Expiry Date", "Notes"])
+
+        for item in items:
+            writer.writerow([
+                item["id"], item["name"], item.get("category_name", ""), item["quantity"],
+                item["unit"], item["storage_location"], item["purchase_date"],
+                item["expiry_date"], item["notes"]
+            ])
+
+        output.seek(0)
+        return Response(
+            output.getvalue(),
+            mimetype="text/csv",
+            headers={"Content-Disposition": "attachment; filename=food_inventory_export.csv"}
+        )
+    except Exception as e:
+        logger.error(f"Export error: {e}")
+        flash("An error occurred exporting data.", "error")
+        return redirect(url_for("dashboard"))
+
+
+# ==================== API ROUTES ====================
+
+@app.route("/api/stats")
+@login_required
+def api_stats():
+    try:
+        days = int(request.args.get("days", 30))
+        return jsonify(db.get_waste_stats(days, get_user_id()))
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/daily-waste")
+@login_required
+def api_daily_waste():
+    try:
+        days = int(request.args.get("days", 7))
+        return jsonify(db.get_daily_waste(days, get_user_id()))
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/expiring")
+@login_required
+def api_expiring():
+    try:
+        days = int(request.args.get("days", 3))
+        items = db.get_expiring_items(days, get_user_id())
+        return jsonify(items)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/notifications/subscribe", methods=["POST"])
+@login_required
+def subscribe_notifications():
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({"success": False, "error": "No data provided"}), 400
+        subscription = data.get("subscription")
+        if subscription:
+            db.save_push_subscription(subscription, get_user_id())
+            return jsonify({"success": True})
+        return jsonify({"success": False, "error": "No subscription provided"}), 400
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route("/api/notifications/unsubscribe", methods=["POST"])
+@login_required
+def unsubscribe_notifications():
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({"success": False, "error": "No data provided"}), 400
+        subscription = data.get("subscription")
+        if subscription:
+            db.remove_push_subscription(subscription, get_user_id())
+            return jsonify({"success": True})
+        return jsonify({"success": False, "error": "No subscription provided"}), 400
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route("/api/notifications/check")
+@login_required
+def check_notifications():
+    try:
+        user_id = get_user_id()
+        items = db.get_expiring_items(3, user_id)
+        today = datetime.now().date()
+        result = []
+        for item in items:
+            days_left = (datetime.strptime(item["expiry_date"], "%Y-%m-%d").date() - today).days
+            result.append({
+                "id": item["id"],
+                "name": item["name"],
+                "category": item.get("category_name", ""),
+                "expiry_date": item["expiry_date"],
+                "days_left": days_left
+            })
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+if __name__ == "__main__":
+    app.run(debug=False, host="0.0.0.0", port=5001)
