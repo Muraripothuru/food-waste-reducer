@@ -628,3 +628,8 @@ def check_notifications():
                         "expiry_date": i["expiry_date"],
                         "days_left": (datetime.strptime(i["expiry_date"], "%Y-%m-%d").date() - today).days} for i in items])
     except Exception as e: return jsonify({"error": str(e)}), 500
+
+
+@app.route("/health")
+def health():
+    return jsonify({"status": "ok"})

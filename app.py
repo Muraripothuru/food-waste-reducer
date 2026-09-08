@@ -793,5 +793,10 @@ def check_notifications():
         return jsonify({"error": str(e)}), 500
 
 
+@app.route("/health")
+def health():
+    return jsonify({"status": "ok"})
+
+
 if __name__ == "__main__":
     app.run(debug=False, host="0.0.0.0", port=5001)

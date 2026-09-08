@@ -3,6 +3,7 @@ document.addEventListener('DOMContentLoaded', function() {
     animateCounters();
     setupPasswordStrength();
     setupPasswordMatch();
+    setupFormLoading();
 });
 
 function createParticles() {
@@ -99,5 +100,18 @@ function setupPasswordMatch() {
             matchText.textContent = 'Passwords do not match';
             matchText.className = 'password-match invalid';
         }
+    });
+}
+
+function setupFormLoading() {
+    document.querySelectorAll('form').forEach(function(form) {
+        form.addEventListener('submit', function() {
+            var btn = form.querySelector('button[type="submit"]');
+            if (!btn) return;
+            btn.disabled = true;
+            var originalText = btn.innerHTML;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> <span>Please wait...</span>';
+            btn.setAttribute('data-original', originalText);
+        });
     });
 }
