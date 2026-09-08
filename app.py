@@ -67,6 +67,11 @@ def login_required(f):
         if "user_id" not in session:
             flash("Please sign in to continue.", "warning")
             return redirect(url_for("signin"))
+        user = db.get_user_by_id(session["user_id"])
+        if not user:
+            session.clear()
+            flash("Session expired. Please sign in again.", "warning")
+            return redirect(url_for("signin"))
         return f(*args, **kwargs)
     return decorated_function
 
@@ -95,9 +100,12 @@ def inject_globals():
     expiring_count = 0
     user = None
     try:
-        expiring_count = len(db.get_expiring_items(3, user_id))
         if user_id:
             user = db.get_user_by_id(user_id)
+            if user:
+                expiring_count = len(db.get_expiring_items(3, user_id))
+            else:
+                session.clear()
     except Exception as e:
         logger.error(f"inject_globals error: {e}")
     return {"expiring_count": expiring_count, "user": user}
