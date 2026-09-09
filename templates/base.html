@@ -10,7 +10,11 @@
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🍃</text></svg>">
 </head>
 <body>
-    <nav class="sidebar">
+    <button class="mobile-menu-toggle" id="menuToggle" onclick="document.querySelector('.sidebar').classList.toggle('open'); document.querySelector('.content').classList.toggle('sidebar-open')">
+        <i class="fas fa-bars"></i>
+    </button>
+
+    <nav class="sidebar" id="sidebar">
         <div class="logo">
             <div class="logo-icon">
                 <i class="fas fa-leaf"></i>
